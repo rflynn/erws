@@ -31,7 +31,7 @@ function reconnect(cfg){
     };
     ws.onclose = function(){
         setTimeout(function(){
-            reconnect(cfg.url);
+            reconnect(cfg);
         }, cfg.retry);
     };
 }
