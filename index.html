@@ -6,17 +6,26 @@
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
 <script src="http://code.highcharts.com/highcharts.js"></script>
 <script src="http://code.highcharts.com/modules/exporting.js"></script>
+<style type="text/css">
+    .connected { background-color: #cfc }
+    .disconnected { background-color: #ccc }
+    .error { background-color: #fcc }
+    #hosterror { color:red }
+</style>
 </head>
 
 <body>
 
+<form id="hostform">
+host <input id="hostport" class="disconnected" size="30" value=""><img id="connecting" src="spin.gif"><span id="hosterror"></span>
+</form>
 <div id="container" style="min-width: 400px; height: 400px; margin: 0 auto"></div>
 
 <script>
 
 var WS_State = {
-    'host': '192.168.1.105',
-    'port': 10100,
+    'host': '127.0.0.1',
+    'port': '10100',
     'url': function(){
             return 'ws://' + this.host + ':' + this.port + '/'
         },
@@ -24,11 +33,64 @@ var WS_State = {
     'connected': false
 }
 
-var ws;
+var ws = null;
 var chart;
 
-function reconnect(cfg){
-    ws = new WebSocket(cfg.url());
+function show_disconnected()
+{
+    $('#hostport').removeClass('error');
+    $('#hostport').addClass('disconnected');
+    $('#hostport').removeClass('connected');
+    $('#connecting').show();
+}
+
+function show_connected()
+{
+    $('#hostport').addClass('connected');
+    $('#hostport').removeClass('disconnected');
+    $('#connecting').hide();
+    $('#hosterror').text('');
+}
+
+function show_error(errstr)
+{
+    $('#hostport').removeClass('connected');
+    $('#hostport').removeClass('disconnected');
+    $('#hostport').addClass('error');
+    $('#hosterror').text(errstr);
+}
+
+function reconnect(cfg)
+{
+    show_disconnected();
+    if (ws) {
+        ws.close();
+        ws = null;
+    }
+    try {
+        ws = new WebSocket(cfg.url());
+    } catch (e) {
+        console.log(e);
+        if (e.name == "SYNTAX_ERR" || e instanceof SyntaxError) {
+            show_error("SyntaxError: bad host:port");
+        } else if (e.name == "SECURITY_ERR" || e instanceof SecurityError) {
+            show_error("SecurityError: insecure or port blocked");
+        } else {
+            show_error(e.message);
+        }
+        setTimeout(function(){
+            reconnect(cfg);
+        }, cfg.retry);
+        return;
+    }
+    ws.onopen = function(evt) {
+        ws.connected = true;
+        show_connected();
+    };
+    ws.onerror = function(evt)
+    {
+        $('#hosterror').text(evt);
+    };
     ws.onmessage = function(evt) {
         var raw = evt.data;
         console.log('message received:' + $.trim(raw));
@@ -37,6 +99,7 @@ function reconnect(cfg){
     };
     ws.onclose = function(){
         if (cfg.connected) {
+            show_disconnected();
             console.log('disconnected, retrying...');
             cfg.connected = false;
         }
@@ -46,9 +109,38 @@ function reconnect(cfg){
     };
 }
 
+function update_hostport()
+{
+    var txt = $.trim($('#hostport').val()) || (WS_State.host + ':' + WS_State.port);
+    var parts = /^(.+?[^:])(?::(\d{2,5}))?$/.exec(txt);
+    var valid = !!parts;
+    if (!parts)
+    {
+        $('#hostport').addClass('error');
+    } else {
+        show_disconnected();
+        WS_State.host = parts[1];
+        WS_State.port = parts[2] || "80";
+        if (ws)
+        {
+            ws.close();
+        }
+    }
+}
+
 $(function () {
 
     $(document).ready(function() {
+
+        $('#connecting').hide();
+        $('#connected').hide();
+        $('#hostport').val(WS_State.host + ':' + WS_State.port);
+        $('#hostport').change(update_hostport);
+        /*$('form#hostform').submit(function(evt){
+            update_hostport();
+            return false;
+        });*/
+
         Highcharts.setOptions({
             global: {
                 useUTC: false
