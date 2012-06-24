@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+<title></title>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script src="http://code.highcharts.com/highcharts.js"></script>
+<script src="http://code.highcharts.com/modules/exporting.js"></script>
+</head>
+
+<body>
+
+<div id="container" style="min-width: 400px; height: 400px; margin: 0 auto"></div>
+
+<script>
+
+var WS_Config = {
+    'url': 'ws://127.0.0.1:10100/',
+    'retry': 5000
+}
+
+var ws;
+var chart;
+
+function reconnect(cfg){
+    ws = new WebSocket(cfg.url);
+    ws.onmessage = function(evt) {
+        var raw = evt.data;
+        console.log('message received:' + raw);
+        var msg = JSON.parse(raw);
+        chart.series[0].addPoint([msg.ts, msg.n], true, true);
+    };
+    ws.onclose = function(){
+        setTimeout(function(){
+            reconnect(cfg.url);
+        }, cfg.retry);
+    };
+}
+
+$(function () {
+
+
+    $(document).ready(function() {
+        Highcharts.setOptions({
+            global: {
+                useUTC: false
+            }
+        });
+    
+        chart = new Highcharts.Chart({
+            chart: {
+                renderTo: 'container',
+                type: 'spline',
+                marginRight: 10,
+                events: {
+                    load: function() {
+                    }
+                }
+            },
+            title: {
+                text: 'Live random data'
+            },
+            xAxis: {
+                type: 'datetime',
+                tickPixelInterval: 150
+            },
+            yAxis: {
+                title: {
+                    text: 'Value'
+                },
+                plotLines: [{
+                    value: 0,
+                    width: 1,
+                    color: '#808080'
+                }]
+            },
+            tooltip: {
+                formatter: function() {
+                        return '<b>'+ this.series.name +'</b><br/>'+
+                        Highcharts.dateFormat('%Y-%m-%d %H:%M:%S', this.x) +'<br/>'+
+                        Highcharts.numberFormat(this.y, 2);
+                }
+            },
+            legend: {
+                enabled: false
+            },
+            exporting: {
+                enabled: false
+            },
+            series: [{
+                name: 'Random data',
+                data: (function() {
+                    // generate an array of random data
+                    var data = [],
+                        time = (new Date()).getTime(),
+                        i;
+    
+                    for (i = -19; i <= 0; i++) {
+                        data.push({
+                            x: time + i * 1000,
+                            y: Math.random()
+                        });
+                    }
+                    return data;
+                })()
+            }]
+        });
+
+        reconnect(WS_Config);
+
+    });
+
+});
+</script>
+</body>
+</html>
