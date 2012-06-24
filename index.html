@@ -30,11 +30,15 @@ function reconnect(cfg){
     ws = new WebSocket(cfg.url());
     ws.onmessage = function(evt) {
         var raw = evt.data;
-        console.log('message received:' + raw);
+        console.log('message received:' + $.trim(raw));
         var msg = JSON.parse(raw);
         chart.series[0].addPoint([msg.ts, msg.n], true, true);
     };
     ws.onclose = function(){
+        if (cfg.connected) {
+            console.log('disconnected, retrying...');
+            cfg.connected = false;
+        }
         setTimeout(function(){
             reconnect(cfg);
         }, cfg.retry);
