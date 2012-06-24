@@ -11,7 +11,7 @@
     websocket_info/3, websocket_terminate/3
 ]).
 
--export([broadcast/0]).
+-export([stream/1]).
 
 % Called to know how to dispatch a new connection.
 init({tcp, http}, Req, _Opts) ->
@@ -34,12 +34,16 @@ terminate(_Req, _State) ->
 -record(ws, {tref}).
 
 -define(BC, bc).
+-define(BC_INTERVAL_MSEC, 5000).
 
 % Called for every new websocket connection.
 websocket_init(_Any, Req, []) ->
-    lager:debug("New client"),
-    gproc:reg({p, l,{?MODULE, ?BC}}),
-    TRef = timer:apply_interval(1000, ?MODULE, broadcast, []),
+    lager:notice("New client"),
+    % set up client stream timer
+    Pid = self(),
+    gproc:reg({p, l, {?MODULE, Pid}}),
+    stream(Pid),
+    {ok, TRef} = timer:apply_interval(?BC_INTERVAL_MSEC, ?MODULE, stream, [Pid]),
     State = #ws{tref=TRef},
     Req2 = cowboy_http_req:compact(Req),
     {ok, Req2, State, hibernate}.
@@ -56,6 +60,7 @@ websocket_handle(_Any, Req, State) ->
 
 websocket_info({_Pid, {_Module, ?BC}, Msg}, Req, State) ->
     % catch gproc:send and forward Msg to client
+    %lager:notice("Tref=~p", [State#ws.tref]),
     {reply, {text, Msg}, Req, State, hibernate};
 
 % Other messages from the system are handled here.
@@ -63,6 +68,7 @@ websocket_info(_Info, Req, State) ->
     {ok, Req, State, hibernate}.
 
 websocket_terminate(_Reason, _Req, State) ->
+    lager:notice("Client disconnected, nuking timer..."),
     {ok, cancel} = timer:cancel(State#ws.tref),
     ok.
 
@@ -72,12 +78,13 @@ js_timestamp() ->
     Milliseconds_since_1970 = (((Megasec * 1000000) + Sec) * 1000) + round(Microsec / 10),
     Milliseconds_since_1970.
 
-broadcast() ->
+stream(Pid) ->
     Ts = js_timestamp(),
+    %lager:notice("Ts=~p", [Ts]),
     N = crypto:rand_uniform(0, 10000) / 10000,
     Json = lists:flatten(io_lib:format(
         "{\"ts\":~B,\"n\":~.2f}\n",
         [Ts, N])),
-    gproc:send({p, l, {?MODULE, ?BC}},
+    gproc:send({p, l, {?MODULE, Pid}},
         {self(), {?MODULE, ?BC}, list_to_binary(Json)}).
 
