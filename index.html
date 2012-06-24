@@ -13,16 +13,21 @@
 
 <script>
 
-var WS_Config = {
-    'url': 'ws://127.0.0.1:10100/',
-    'retry': 5000
+var WS_State = {
+    'host': '192.168.1.105',
+    'port': 10100,
+    'url': function(){
+            return 'ws://' + this.host + ':' + this.port + '/'
+        },
+    'retry': 5000,
+    'connected': false
 }
 
 var ws;
 var chart;
 
 function reconnect(cfg){
-    ws = new WebSocket(cfg.url);
+    ws = new WebSocket(cfg.url());
     ws.onmessage = function(evt) {
         var raw = evt.data;
         console.log('message received:' + raw);
@@ -105,7 +110,7 @@ $(function () {
             }]
         });
 
-        reconnect(WS_Config);
+        reconnect(WS_State);
 
     });
 
