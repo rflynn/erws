@@ -75,7 +75,7 @@ websocket_terminate(_Reason, _Req, State) ->
 js_timestamp() ->
     % format of javascript's Date.getTime()
     {Megasec, Sec, Microsec} = now(),
-    Milliseconds_since_1970 = (((Megasec * 1000000) + Sec) * 1000) + round(Microsec / 10),
+    Milliseconds_since_1970 = (((Megasec * 1000000) + Sec) * 1000) + (Microsec div 1000),
     Milliseconds_since_1970.
 
 stream(Pid) ->
